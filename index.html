@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>積立NISA 資産管理ツール</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NISA管理">
+<meta name="theme-color" content="#2a5f3e">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap');
+:root{--bg:#f5f4f0;--surface:#fff;--border:rgba(0,0,0,.1);--border-strong:rgba(0,0,0,.2);--text:#1a1a18;--muted:#888880;--green:#1a7a58;--green-bg:#e6f5ef;--red:#b83a2a;--red-bg:#faeae7;--blue:#2255a4;--blue-bg:#e8eef8;--accent:#2a5f3e;--r:10px;--rl:16px;--gold:#b8922a;--gold-bg:#fdf3dc;--silver:#7a7a7a;--silver-bg:#f0f0ee;--bronze:#8a5a2a;--bronze-bg:#f5ebe0}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+header{background:var(--accent);color:#fff;padding:24px 32px 20px}
+header h1{font-size:20px;font-weight:700;letter-spacing:.04em}
+header p{font-size:13px;opacity:.7;margin-top:4px}
+.main{max-width:900px;margin:0 auto;padding:24px 20px 60px}
+.tabs{display:flex;gap:4px;background:var(--surface);border:.5px solid var(--border);border-radius:var(--r);padding:4px;margin-bottom:24px}
+.tab{flex:1;padding:9px;font-size:12px;font-family:inherit;font-weight:500;border:none;background:none;border-radius:7px;cursor:pointer;color:var(--muted);transition:all .15s}
+.tab.active{background:var(--accent);color:#fff}
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.metric{background:var(--surface);border:.5px solid var(--border);border-radius:var(--r);padding:16px}
+.ml{font-size:11px;color:var(--muted);letter-spacing:.05em;margin-bottom:6px}
+.mv{font-size:22px;font-weight:700;font-family:'DM Mono',monospace}
+.ms{font-size:12px;margin-top:2px;font-family:'DM Mono',monospace;color:var(--muted)}
+.pos{color:var(--green)}.neg{color:var(--red)}.neu{color:var(--text)}
+.card{background:var(--surface);border:.5px solid var(--border);border-radius:var(--rl);padding:20px;margin-bottom:16px}
+.ct{font-size:14px;font-weight:700;color:var(--text);margin-bottom:16px;letter-spacing:.03em}
+.chr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.cl{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px}
+.cl span{font-size:11px;color:var(--muted)}
+.fr{display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:center;margin-bottom:8px}
+.fr input{font-size:14px;font-family:inherit;padding:9px 12px;border:.5px solid var(--border-strong);border-radius:var(--r);background:var(--bg);color:var(--text);width:100%;transition:all .15s}
+.fr input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(42,95,62,.12);background:#fff}
+.rb{background:none;border:.5px solid var(--border);color:var(--muted);cursor:pointer;font-size:16px;padding:6px 10px;border-radius:var(--r);transition:all .15s}
+.rb:hover{background:var(--red-bg);color:var(--red);border-color:var(--red)}
+.ab{background:none;border:1px dashed var(--border-strong);border-radius:var(--r);padding:10px;font-size:13px;font-family:inherit;color:var(--muted);cursor:pointer;width:100%;margin-top:8px;transition:all .15s}
+.ab:hover{background:var(--green-bg);color:var(--green);border-color:var(--green)}
+.sw{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-bottom:16px}
+.sm{font-size:13px;color:var(--green);min-height:20px}
+.sb{background:var(--accent);color:#fff;border:none;border-radius:var(--r);padding:10px 24px;font-size:14px;font-family:inherit;font-weight:700;cursor:pointer;letter-spacing:.03em;transition:opacity .15s}
+.sb:hover{opacity:.85}
+.wc{display:flex;align-items:flex-end;gap:10px;height:280px;padding:0 4px;overflow-x:auto}
+.wcol{min-width:64px;flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end}
+.wv{font-size:11px;font-family:'DM Mono',monospace;font-weight:500;margin-bottom:4px;text-align:center;white-space:nowrap}
+.wbw{width:100%;display:flex;flex-direction:column;align-items:center}
+.wp{font-size:10px;font-family:'DM Mono',monospace;text-align:center;white-space:nowrap;margin-top:3px}
+.wn{font-size:11px;color:var(--muted);text-align:center;margin-top:5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%}
+.rk{font-size:11px;font-weight:700;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:4px;flex-shrink:0}
+.r1{background:var(--gold-bg);color:var(--gold)}.r2{background:var(--silver-bg);color:var(--silver)}.r3{background:var(--bronze-bg);color:var(--bronze)}.rn{background:var(--bg);color:var(--muted);border:.5px solid var(--border)}
+.th{display:grid;grid-template-columns:28px 2fr 1fr 1fr 1fr;gap:8px;font-size:11px;color:var(--muted);padding-bottom:10px;border-bottom:.5px solid var(--border);margin-bottom:8px}
+.tr{display:grid;grid-template-columns:28px 2fr 1fr 1fr 1fr;gap:8px;font-size:13px;padding:10px 0;border-bottom:.5px solid var(--border);align-items:center}
+.tr:last-child{border-bottom:none}
+.tr.t1{background:linear-gradient(90deg,var(--gold-bg) 0%,transparent 60%);border-radius:var(--r);padding-left:6px}
+.tr.t2{background:linear-gradient(90deg,var(--silver-bg) 0%,transparent 60%);border-radius:var(--r);padding-left:6px}
+.tr.t3{background:linear-gradient(90deg,var(--bronze-bg) 0%,transparent 60%);border-radius:var(--r);padding-left:6px}
+.badge{font-size:11px;font-family:'DM Mono',monospace;font-weight:500;padding:3px 8px;border-radius:20px;display:inline-block}
+.badge.pos{background:var(--green-bg);color:var(--green)}.badge.neg{background:var(--red-bg);color:var(--red)}
+.mono{font-family:'DM Mono',monospace;font-size:13px}
+.leg{display:flex;gap:16px;margin-top:12px;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.ld{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.pt{display:flex;gap:4px}
+.ptb{padding:5px 14px;font-size:12px;font-family:inherit;font-weight:500;border:.5px solid var(--border-strong);border-radius:20px;cursor:pointer;background:none;color:var(--muted);transition:all .15s}
+.ptb.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.hr{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:.5px solid var(--border);font-size:13px}
+.hr:last-child{border-bottom:none}
+.em{font-size:13px;color:var(--muted);padding:12px 0}
+canvas{width:100%!important}
+.drop{border:2px dashed var(--border-strong);border-radius:var(--rl);padding:28px 16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg);position:relative}
+.drop:hover,.drop.over{border-color:var(--accent);background:var(--green-bg)}
+.drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:28px;margin-bottom:8px}
+.drop-text{font-size:13px;font-weight:500;color:var(--text);margin-bottom:4px}
+.drop-sub{font-size:11px;color:var(--muted)}
+.spin{width:16px;height:16px;border:2px solid var(--blue);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cbi{background:var(--green-bg);color:var(--green);border:.5px solid rgba(26,122,88,.25);display:flex;align-items:center;justify-content:center;padding:9px 16px;font-size:13px;font-family:inherit;font-weight:500;border-radius:var(--r);cursor:pointer;transition:all .15s;width:100%}
+.cbi:hover{background:#cceedd}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:#fff;padding:10px 20px;border-radius:var(--r);font-size:13px;opacity:0;transition:all .25s;pointer-events:none;z-index:999;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width: 600px) {
+  header{padding:16px 16px 14px}
+  header h1{font-size:17px}
+  .main{padding:16px 12px 60px}
+  .tabs{gap:2px;padding:3px;overflow-x:auto;flex-wrap:nowrap}
+  .tab{padding:8px 6px;font-size:11px;min-width:60px;flex-shrink:0}
+  .sg{grid-template-columns:1fr;gap:8px;margin-bottom:16px}
+  .mv{font-size:18px}
+  .card{padding:14px 12px;margin-bottom:12px}
+  .cl{grid-template-columns:1fr;gap:4px;margin-bottom:4px}
+  .cl span:last-child{display:none}
+  .fr{grid-template-columns:1fr;gap:6px;margin-bottom:12px}
+  .fr input{padding:12px;font-size:16px}
+  .rb{padding:10px 14px;font-size:18px}
+  .ab{padding:12px;font-size:14px}
+  .sw{flex-direction:column;align-items:stretch;gap:8px}
+  .sm{text-align:center}
+  .sb{padding:14px;font-size:15px;width:100%}
+  .wc{height:200px;gap:6px}
+  .wcol{min-width:52px}
+  .wv{font-size:10px}
+  .wp{font-size:9px}
+  .wn{font-size:10px}
+  .rk{width:18px;height:18px;font-size:10px}
+  .th{grid-template-columns:28px 1.5fr 1fr 1fr 1fr;font-size:10px;gap:4px}
+  .tr{grid-template-columns:28px 1.5fr 1fr 1fr 1fr;font-size:11px;gap:4px;padding:8px 0}
+  .badge{font-size:10px;padding:2px 6px}
+  .mono{font-size:11px}
+  .hr{flex-direction:column;align-items:flex-start;gap:4px}
+  .pt{flex-wrap:wrap;gap:4px}
+  .ptb{padding:6px 10px;font-size:11px}
+  .chr{flex-direction:column;align-items:flex-start;gap:8px}
+  .cbi{padding:14px;font-size:14px}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>積立NISA 資産管理ツール</h1>
+  <p>tsumiki証券対応・スクリーンショットから自動入力</p>
+</header>
+<div class="main">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('input')">入力・損益確認</button>
+    <button class="tab" onclick="switchTab('hist')">推移グラフ</button>
+    <button class="tab" onclick="switchTab('bk')">バックアップ</button>
+  </div>
+
+  <!-- 入力タブ -->
+  <div id="tab-input">
+    <div class="sg" id="summary">
+      <div class="metric"><div class="ml">評価額合計</div><div class="mv neu">—</div></div>
+      <div class="metric"><div class="ml">評価損益合計</div><div class="mv neu">—</div></div>
+      <div class="metric"><div class="ml">損益率</div><div class="mv neu">—</div></div>
+    </div>
+    <div class="card">
+      <div class="ct">銘柄入力</div>
+      <div class="cl"><span>銘柄名</span><span>評価額（円）</span><span>評価損益（円）</span><span></span></div>
+      <div id="rows"></div>
+      <button class="ab" onclick="addRow()">＋ 銘柄を追加</button>
+    </div>
+    <div class="card" id="wcard" style="display:none">
+      <div class="ct">評価額ランキング（高い順）</div>
+      <div class="wc" id="wchart"></div>
+      <div class="leg">
+        <div class="li"><div class="ld" style="background:#5cb88a"></div>評価益（プラス）</div>
+        <div class="li"><div class="ld" style="background:#a8dcc0"></div>取得原価相当</div>
+        <div class="li"><div class="ld" style="background:#d97060"></div>評価損（マイナス）</div>
+      </div>
+    </div>
+    <div class="sw">
+      <span class="sm" id="savemsg"></span>
+      <button class="sb" onclick="saveSnapshot()">今日のデータを記録する</button>
+    </div>
+    <div class="card" id="rcard" style="display:none">
+      <div class="ct">損益一覧（評価額ランキング順）</div>
+      <div class="th"><span>順位</span><span>銘柄名</span><span>評価額</span><span>評価損益</span><span>損益率</span></div>
+      <div id="rtable"></div>
+    </div>
+  </div>
+
+  <!-- 推移グラフタブ -->
+  <div id="tab-hist" style="display:none">
+    <div class="card">
+      <div class="chr">
+        <div class="ct" style="margin:0">評価額の推移</div>
+        <div class="pt">
+          <button class="ptb active" onclick="setPeriod('daily',this)">日次</button>
+          <button class="ptb" onclick="setPeriod('monthly',this)">月次</button>
+          <button class="ptb" onclick="setPeriod('yearly',this)">年次</button>
+        </div>
+      </div>
+      <canvas id="lchart" height="200"></canvas>
+    </div>
+    <div class="card">
+      <div class="ct">記録一覧（直近10件）</div>
+      <div id="hlist"></div>
+    </div>
+  </div>
+
+  <!-- バックアップタブ -->
+  <div id="tab-bk" style="display:none">
+    <div class="card">
+      <div class="ct">バックアップを出力</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.8">銘柄データ・推移データをひとつのJSONファイルにまとめて出力します。どのPCでも、どのブラウザでも復元できます。</p>
+      <button class="sb" style="width:100%;font-size:15px;padding:14px" onclick="exportJSON()">↓ バックアップを出力（JSONファイル）</button>
+    </div>
+    <div class="card">
+      <div class="ct">バックアップから復元</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.8">以前出力したJSONファイルを選択するとデータが復元されます。</p>
+      <button class="cbi" onclick="document.getElementById('jsonin').click()">↑ JSONファイルから復元する</button>
+      <input type="file" id="jsonin" accept=".json" onchange="importJSON(event)" style="display:none" />
+      <p style="font-size:12px;color:var(--muted);margin-top:10px">※ 現在のデータは上書きされます</p>
+    </div>
+    <div class="card" style="background:var(--green-bg);border-color:rgba(26,122,88,.2)">
+      <div class="ct" style="color:var(--green)">バックアップのおすすめ手順</div>
+      <ol style="font-size:13px;color:var(--text);line-height:2;padding-left:1.2em">
+        <li>月に1回など「バックアップを出力」を押してJSONファイルを保存する</li>
+        <li>PCを乗り換えたときや、データが消えたときは「JSONファイルから復元する」を押す</li>
+        <li>保存したJSONファイルを選ぶだけで全データが復元される</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+var rows = [];
+var nextId = 1;
+var snapshots = [];
+var period = 'daily';
+var chart = null;
+var aiData = [];
+var imgs = [null, null];
+var mimes = ['image/jpeg', 'image/jpeg'];
+var pasteIdx = 0;
+var RK = 'nisa_rows_v2';
+var SK = 'nisa_snapshots_v2';
+function fmt(n) { return Number(Math.round(n)).toLocaleString('ja-JP'); }
+function rkc(i) { return i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : 'rn'; }
+function getSorted(valid) {
+  return valid.slice().sort(function(a, b) { return b.eval - a.eval; });
+}
+
+function switchTab(tab) {
+  var list = ['input', 'hist', 'bk'];
+  document.querySelectorAll('.tab').forEach(function(t, i) {
+    t.classList.toggle('active', list[i] === tab);
+  });
+  list.forEach(function(t) {
+    document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
+  });
+  if (tab === 'hist') renderHist();
+}
+
+function setPeriod(p, el) {
+  period = p;
+  document.querySelectorAll('.ptb').forEach(function(t) { t.classList.remove('active'); });
+  el.classList.add('active');
+  renderHist();
+}
+
+function renderRows() {
+  var html = '';
+  rows.forEach(function(r) {
+    html += '<div class="fr" id="row-' + r.id + '">';
+    html += '<input type="text" placeholder="例: ひふみプラス" value="' + r.name + '" oninput="upRow(' + r.id + ',\'name\',this.value)" />';
+    html += '<input type="number" placeholder="例: 352000" value="' + (r.eval || '') + '" oninput="upRow(' + r.id + ',\'eval\',this.value)" />';
+    html += '<input type="number" placeholder="例: 52000（損は－）" value="' + (r.pnl !== 0 ? r.pnl : '') + '" oninput="upRow(' + r.id + ',\'pnl\',this.value)" />';
+    html += '<button class="rb" onclick="delRow(' + r.id + ')">×</button>';
+    html += '</div>';
+  });
+  document.getElementById('rows').innerHTML = html;
+  renderResult();
+}
+
+function upRow(id, field, val) {
+  var r = rows.find(function(x) { return x.id === id; });
+  if (!r) return;
+  r[field] = field === 'name' ? val : (val === '' ? 0 : parseFloat(val));
+  saveRows();
+  renderResult();
+}
+
+function addRow() {
+  rows.push({ id: nextId++, name: '', eval: 0, pnl: 0 });
+  renderRows();
+  saveRows();
+}
+
+function delRow(id) {
+  rows = rows.filter(function(r) { return r.id !== id; });
+  renderRows();
+  saveRows();
+}
+
+function renderResult() {
+  var valid = rows.filter(function(r) { return r.name && r.eval > 0; });
+  var te = valid.reduce(function(s, r) { return s + r.eval; }, 0);
+  var tp = valid.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+  var tc = te - tp;
+  var tr = tc > 0 ? (tp / tc * 100) : 0;
+
+  document.getElementById('summary').innerHTML =
+    '<div class="metric"><div class="ml">評価額合計</div><div class="mv neu">¥' + fmt(te) + '</div></div>' +
+    '<div class="metric"><div class="ml">評価損益合計</div><div class="mv ' + (tp >= 0 ? 'pos' : 'neg') + '">' + (tp >= 0 ? '+' : '') + '¥' + fmt(tp) + '</div></div>' +
+    '<div class="metric"><div class="ml">損益率</div><div class="mv ' + (tr >= 0 ? 'pos' : 'neg') + '">' + (tr >= 0 ? '+' : '') + tr.toFixed(2) + '%</div><div class="ms">取得原価 ¥' + fmt(tc) + '</div></div>';
+
+  if (!valid.length) {
+    document.getElementById('wcard').style.display = 'none';
+    document.getElementById('rcard').style.display = 'none';
+    return;
+  }
+  document.getElementById('wcard').style.display = '';
+  document.getElementById('rcard').style.display = '';
+  var s = getSorted(valid);
+  renderWater(s);
+  renderTable(s);
+}
+
+function renderWater(s) {
+  var max = s[0].eval;
+  var H = 200;
+  var html = '';
+  s.forEach(function(r, i) {
+    var pnl = r.pnl || 0;
+    var cost = r.eval - pnl;
+    var pos = pnl >= 0;
+    var ch = Math.max(Math.round(cost / max * H), 4);
+    var ph = Math.max(Math.round(Math.abs(pnl) / max * H), 0);
+    var rate = cost > 0 ? (pnl / cost * 100).toFixed(1) : '0.0';
+    var nm = r.name.length > 10 ? r.name.slice(0, 10) + '…' : r.name;
+    var bar = pos
+      ? '<div style="width:100%;height:' + ph + 'px;background:#5cb88a;border-radius:6px 6px 0 0;min-height:0"></div>' +
+        '<div style="width:100%;height:' + ch + 'px;background:#a8dcc0;border-radius:' + (ph === 0 ? '6px 6px' : '0 0') + ' 6px 6px"></div>'
+      : '<div style="width:100%;height:' + Math.max(ch - ph, 4) + 'px;background:#a8dcc0;border-radius:6px 6px 0 0"></div>' +
+        '<div style="width:100%;height:' + ph + 'px;background:#d97060;border-radius:0 0 6px 6px"></div>';
+    html += '<div class="wcol">' +
+      '<div class="rk ' + rkc(i) + '">' + (i + 1) + '</div>' +
+      '<div class="wv ' + (pos ? 'pos' : 'neg') + '">¥' + fmt(r.eval) + '</div>' +
+      '<div class="wbw">' + bar + '</div>' +
+      '<div class="wp ' + (pos ? 'pos' : 'neg') + '">' + (pos ? '+' : '') + '¥' + fmt(pnl) + '（' + (parseFloat(rate) >= 0 ? '+' : '') + rate + '%）</div>' +
+      '<div class="wn">' + nm + '</div>' +
+      '</div>';
+  });
+  document.getElementById('wchart').innerHTML = html;
+}
+
+function renderTable(s) {
+  var html = '';
+  s.forEach(function(r, i) {
+    var pnl = r.pnl || 0;
+    var cost = r.eval - pnl;
+    var rate = cost > 0 ? (pnl / cost * 100).toFixed(2) : '0.00';
+    html += '<div class="tr ' + (i < 3 ? 't' + (i + 1) : '') + '">' +
+      '<span><span class="rk ' + rkc(i) + '" style="display:inline-flex">' + (i + 1) + '</span></span>' +
+      '<span style="font-size:13px">' + r.name + '</span>' +
+      '<span class="mono">¥' + fmt(r.eval) + '</span>' +
+      '<span class="mono ' + (pnl >= 0 ? 'pos' : 'neg') + '" style="font-weight:500">' + (pnl >= 0 ? '+' : '') + '¥' + fmt(pnl) + '</span>' +
+      '<span><span class="badge ' + (pnl >= 0 ? 'pos' : 'neg') + '">' + (parseFloat(rate) >= 0 ? '+' : '') + rate + '%</span></span>' +
+      '</div>';
+  });
+  document.getElementById('rtable').innerHTML = html;
+}
+
+function saveSnapshot() {
+  var valid = rows.filter(function(r) { return r.name && r.eval > 0; });
+  if (!valid.length) { toast('銘柄を入力してから記録してください', true); return; }
+  var today = new Date().toISOString().slice(0, 10);
+  var te = valid.reduce(function(s, r) { return s + r.eval; }, 0);
+  var tp = valid.reduce(function(s, r) { return s + (r.pnl || 0); }, 0);
+  snapshots = snapshots.filter(function(s) { return s.date !== today; });
+  snapshots.push({ date: today, totalEval: te, totalCost: te - tp, totalPnl: tp });
+  snapshots.sort(function(a, b) { return a.date.localeCompare(b.date); });
+  saveSnaps(snapshots);
+  document.getElementById('savemsg').textContent = today + ' のデータを記録しました ✓';
+  setTimeout(function() { document.getElementById('savemsg').textContent = ''; }, 3000);
+}
+
+// ---- AI OCR ----
+
+function onDrop(e, idx) {
+  e.preventDefault();
+  document.getElementById('drop' + (idx + 1)).classList.remove('over');
+  var f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadImg(f, idx);
+}
+
+function onFile(e, idx) {
+  var f = e.target.files[0];
+  if (f) loadImg(f, idx);
+}
+
+function loadImg(file, idx) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var url = e.target.result;
+    imgs[idx] = url.split(',')[1];
+    mimes[idx] = file.type || 'image/jpeg';
+    var n = idx + 1;
+    document.getElementById('pimg' + n).src = url;
+    document.getElementById('prev' + n).style.display = '';
+    document.getElementById('plbl' + n).textContent = '✓ ' + n + '枚目を読み込みました';
+    document.getElementById('aresult').style.display = 'none';
+    aiData = [];
+    if (idx === 0) pasteIdx = 1;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ---- 推移グラフ ----
+function agg(p) {
+  if (p === 'daily') return snapshots.slice(-30);
+  var map = {};
+  snapshots.forEach(function(s) {
+    var k = p === 'monthly' ? s.date.slice(0, 7) : s.date.slice(0, 4);
+    map[k] = s;
+  });
+  var vals = Object.values(map);
+  return p === 'monthly' ? vals.slice(-12) : vals;
+}
+
+function lbl(d, p) {
+  if (p === 'daily') return d.slice(5).replace('-', '/');
+  if (p === 'monthly') return d.slice(0, 7).replace('-', '/');
+  return d.slice(0, 4) + '年';
+}
+
+function renderHist() {
+  var data = agg(period);
+  var ctx = document.getElementById('lchart').getContext('2d');
+  if (chart) chart.destroy();
+  chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: data.map(function(s) { return lbl(s.date, period); }),
+      datasets: [
+        {
+          label: '評価額',
+          data: data.map(function(s) { return s.totalEval; }),
+          borderColor: '#1a7a58', backgroundColor: 'rgba(26,122,88,0.07)',
+          fill: true, tension: 0.35, pointRadius: data.length > 20 ? 0 : 4,
+          pointBackgroundColor: '#1a7a58', borderWidth: 2,
+          yAxisID: 'yLeft'
+        },
+        {
+          label: '取得原価',
+          data: data.map(function(s) { return s.totalCost; }),
+          borderColor: '#2255a4', backgroundColor: 'transparent',
+          borderDash: [5, 5], tension: 0.3, pointRadius: 0, borderWidth: 1.5,
+          yAxisID: 'yLeft'
+        },
+        {
+          label: '損益率',
+          data: data.map(function(s) {
+            if (!s.totalCost || s.totalCost === 0) return null;
+            return parseFloat((s.totalPnl / s.totalCost * 100).toFixed(2));
+          }),
+          borderColor: '#b8922a', backgroundColor: 'rgba(184,146,42,0.08)',
+          borderDash: [3, 3], tension: 0.35, pointRadius: data.length > 20 ? 0 : 3,
+          pointBackgroundColor: '#b8922a', borderWidth: 1.5,
+          yAxisID: 'yRight', fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#888880', font: { size: 12, family: 'Noto Sans JP' }, boxWidth: 20, padding: 16 } },
+        tooltip: {
+          callbacks: {
+            label: function(c) {
+              if (c.dataset.yAxisID === 'yRight') return ' ' + c.dataset.label + ': ' + c.parsed.y + '%';
+              return ' ' + c.dataset.label + ': ¥' + fmt(c.parsed.y);
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#888880', font: { size: 11 }, maxTicksLimit: 10 }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        yLeft: {
+          type: 'linear', position: 'left',
+          ticks: { color: '#888880', font: { size: 11, family: 'DM Mono' }, callback: function(v) { return '¥' + fmt(v); } },
+          grid: { color: 'rgba(0,0,0,0.05)' }
+        },
+        yRight: {
+          type: 'linear', position: 'right',
+          ticks: { color: '#b8922a', font: { size: 11, family: 'DM Mono' }, callback: function(v) { return v + '%'; } },
+          grid: { drawOnChartArea: false }
+        }
+      }
+    }
+  });
+  var list = document.getElementById('hlist');
+  var recent = snapshots.slice().reverse().slice(0, 10);
+  if (!recent.length) { list.innerHTML = '<p class="em">まだ記録がありません。</p>'; return; }
+  var html = '';
+  recent.forEach(function(s) {
+    var pnl = s.totalPnl || (s.totalEval - s.totalCost);
+    var rate = s.totalCost > 0 ? (pnl / s.totalCost * 100).toFixed(2) : '0.00';
+    html += '<div class="hr">' +
+      '<span style="color:var(--muted);font-size:12px">' + s.date + '</span>' +
+      '<span class="mono" style="font-weight:500">¥' + fmt(s.totalEval) + '</span>' +
+      '<span class="mono ' + (pnl >= 0 ? 'pos' : 'neg') + '" style="font-size:12px">' + (pnl >= 0 ? '+' : '') + '¥' + fmt(pnl) + '（' + (parseFloat(rate) >= 0 ? '+' : '') + rate + '%）</span>' +
+      '</div>';
+  });
+  list.innerHTML = html;
+}
+
+// ---- バックアップ ----
+function exportJSON() {
+  var today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  var data = { rows: rows, snapshots: snapshots, exportedAt: new Date().toISOString() };
+  var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'nisa_backup_' + today + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('バックアップを出力しました');
+}
+
+function importJSON(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      if (data.rows && data.rows.length) {
+        rows = data.rows;
+        var ids = rows.map(function(r) { return r.id; }).concat([0]);
+        nextId = Math.max.apply(null, ids) + 1;
+        saveRows();
+        renderRows();
+      }
+      if (data.snapshots && data.snapshots.length) {
+        snapshots = data.snapshots.sort(function(a, b) { return a.date.localeCompare(b.date); });
+        saveSnaps(snapshots);
+      }
+      toast('バックアップから復元しました');
+    } catch(err) {
+      toast('ファイルの読み込みに失敗しました', true);
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+  event.target.value = '';
+}
+</script>
+</body>
+</html>
