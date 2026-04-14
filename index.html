@@ -133,6 +133,7 @@ canvas{width:100%!important}
 <div class="main">
   <div class="tabs" id="tabBar">
     <button class="tab active" data-tab="input" draggable="true" onclick="switchTab('input')">入力・損益確認</button>
+    <button class="tab" data-tab="sim" draggable="true" onclick="switchTab('sim')">シミュレーション</button>
     <button class="tab" data-tab="hist" draggable="true" onclick="switchTab('hist')">推移グラフ</button>
     <button class="tab" data-tab="bk" draggable="true" onclick="switchTab('bk')">バックアップ</button>
   </div>
@@ -167,6 +168,54 @@ canvas{width:100%!important}
       <div class="ct">損益一覧（評価額ランキング順）</div>
       <div class="th"><span>順位</span><span>銘柄名</span><span>評価額</span><span>評価損益</span><span>損益率</span></div>
       <div id="rtable"></div>
+    </div>
+  </div>
+
+  <!-- シミュレーションタブ -->
+  <div id="tab-sim" style="display:none">
+    <div class="card" style="background:var(--blue-bg);border-color:rgba(34,85,164,.2)">
+      <div class="ct" style="color:var(--blue)">ご注意ください</div>
+      <p style="font-size:13px;line-height:1.9">このシミュレーションは想定年利による試算です。実際の運用成果を保証するものではありません。投資判断はご自身の責任でお願いします。</p>
+    </div>
+    <div class="card">
+      <div class="ct">積立設定</div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.8">銘柄ごとの月次積立金額と現在の評価額を入力してください。</p>
+      <div id="simInputs"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px">
+        <div>
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">現在の評価額合計（円）</label>
+          <input type="number" id="simCurrentVal" placeholder="例: 1500000" style="width:100%;font-size:14px;font-family:inherit;padding:9px 12px;border:.5px solid var(--border-strong);border-radius:var(--r);background:var(--bg);color:var(--text)" oninput="runSim()" />
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px">シミュレーション期間</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px" id="simPeriodBtns">
+            <button class="ptb active" data-yr="5" onclick="setSimPeriod(5,this)">5年</button>
+            <button class="ptb" data-yr="10" onclick="setSimPeriod(10,this)">10年</button>
+            <button class="ptb" data-yr="20" onclick="setSimPeriod(20,this)">20年</button>
+            <button class="ptb" data-yr="30" onclick="setSimPeriod(30,this)">30年</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="simResult" style="display:none">
+      <div class="sg" id="simSummary"></div>
+      <div class="card">
+        <div class="ct">資産推移シミュレーション</div>
+        <canvas id="simChart" height="220"></canvas>
+        <div class="leg" style="margin-top:12px">
+          <div class="li"><div class="ld" style="background:#b83a2a"></div>悲観（年利3%）</div>
+          <div class="li"><div class="ld" style="background:#b8922a"></div>標準（年利5%）</div>
+          <div class="li"><div class="ld" style="background:#1a7a58"></div>楽観（年利7%）</div>
+          <div class="li"><div class="ld" style="background:#2255a4"></div>積立元本</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="ct">銘柄別 積立内訳</div>
+        <div class="th" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr">
+          <span>銘柄名</span><span>月額</span><span>元本（期間）</span><span>標準想定額</span><span>想定損益</span>
+        </div>
+        <div id="simBrandTable"></div>
+      </div>
     </div>
   </div>
 
@@ -252,7 +301,7 @@ function getSorted(valid) {
 }
 
 function switchTab(tab) {
-  var list = ['input', 'hist', 'bk'];
+  var list = ['input', 'sim', 'hist', 'bk'];
   document.querySelectorAll('.tab').forEach(function(t) {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
@@ -260,6 +309,7 @@ function switchTab(tab) {
     document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
   });
   if (tab === 'hist') renderHist();
+  if (tab === 'sim') initSimTab();
 }
 
 function setPeriod(p, el) {
@@ -506,6 +556,142 @@ function renderHist() {
   allSnapsCache = allSnaps;
   if (!allSnaps.length) { list.innerHTML = '<p class="em">まだ記録がありません。</p>'; return; }
   renderHistList(allSnaps, 10);
+}
+
+// ---- シミュレーション ----
+var simYears = 5;
+var simChart = null;
+
+function initSimTab() {
+  var valid = rows.filter(function(r) { return r.name && r.eval > 0; });
+  var container = document.getElementById('simInputs');
+  if (!container) return;
+  var totalEval = valid.reduce(function(s, r) { return s + r.eval; }, 0);
+  var curInput = document.getElementById('simCurrentVal');
+  if (curInput && !curInput.value && totalEval > 0) curInput.value = totalEval;
+  if (!valid.length) {
+    container.innerHTML = '<p style="font-size:13px;color:var(--muted)">「入力・損益確認」タブで銘柄データを入力してください。</p>';
+    return;
+  }
+  var html = '<div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px">' +
+    '<span style="font-size:11px;color:var(--muted)">銘柄名</span>' +
+    '<span style="font-size:11px;color:var(--muted)">月次積立金額（円）</span></div>';
+  valid.forEach(function(r) {
+    html += '<div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;align-items:center;margin-bottom:8px">' +
+      '<span style="font-size:13px">' + r.name + '</span>' +
+      '<input type="number" id="sim_' + r.id + '" placeholder="例: 10000" ' +
+      'oninput="runSim()" ' +
+      'style="font-size:14px;font-family:inherit;padding:8px 12px;border:.5px solid var(--border-strong);border-radius:var(--r);background:var(--bg);color:var(--text);width:100%">' +
+      '</div>';
+  });
+  container.innerHTML = html;
+  runSim();
+}
+
+function setSimPeriod(yr, el) {
+  simYears = yr;
+  document.querySelectorAll('#simPeriodBtns .ptb').forEach(function(b) { b.classList.remove('active'); });
+  el.classList.add('active');
+  runSim();
+}
+
+function calcFV(pv, monthly, rate, years) {
+  var r = rate / 12;
+  var n = years * 12;
+  if (r === 0) return pv + monthly * n;
+  return pv * Math.pow(1 + r, n) + monthly * (Math.pow(1 + r, n) - 1) / r;
+}
+
+function runSim() {
+  var valid = rows.filter(function(r) { return r.name && r.eval > 0; });
+  if (!valid.length) return;
+  var curVal = parseFloat(document.getElementById('simCurrentVal').value) || 0;
+  var totalMonthly = 0;
+  valid.forEach(function(r) {
+    var el = document.getElementById('sim_' + r.id);
+    totalMonthly += el ? (parseFloat(el.value) || 0) : 0;
+  });
+  if (totalMonthly === 0 && curVal === 0) { document.getElementById('simResult').style.display = 'none'; return; }
+
+  var rates = [0.03, 0.05, 0.07];
+  var labels = ['悲観(3%)', '標準(5%)', '楽観(7%)'];
+  var colors = ['#b83a2a', '#b8922a', '#1a7a58'];
+  var n = simYears;
+  var fvs = rates.map(function(r) { return calcFV(curVal, totalMonthly, r, n); });
+  var principal = curVal + totalMonthly * n * 12;
+
+  document.getElementById('simSummary').innerHTML = rates.map(function(r, i) {
+    var fv = fvs[i];
+    var gain = fv - principal;
+    return '<div class="metric">' +
+      '<div class="ml">' + labels[i] + '（' + n + '年後）</div>' +
+      '<div class="mv" style="color:' + colors[i] + '">¥' + fmt(Math.round(fv)) + '</div>' +
+      '<div class="ms ' + (gain >= 0 ? 'pos' : 'neg') + '">' + (gain >= 0 ? '+' : '') + '¥' + fmt(Math.round(gain)) + '</div>' +
+      '</div>';
+  }).join('');
+
+  var chartLabels = [];
+  var datasets = rates.map(function() { return []; });
+  var principalData = [];
+  for (var yr = 0; yr <= n; yr++) {
+    chartLabels.push(yr === 0 ? '現在' : yr + '年後');
+    rates.forEach(function(r, i) { datasets[i].push(Math.round(calcFV(curVal, totalMonthly, r, yr))); });
+    principalData.push(Math.round(curVal + totalMonthly * yr * 12));
+  }
+
+  var ctx = document.getElementById('simChart').getContext('2d');
+  if (simChart) simChart.destroy();
+  simChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: chartLabels,
+      datasets: [
+        { label: '悲観（3%）', data: datasets[0], borderColor: '#b83a2a', fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+        { label: '標準（5%）', data: datasets[1], borderColor: '#b8922a', fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2.5 },
+        { label: '楽観（7%）', data: datasets[2], borderColor: '#1a7a58', fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2 },
+        { label: '積立元本', data: principalData, borderColor: '#2255a4', borderDash: [5,5], tension: 0, pointRadius: 0, borderWidth: 1.5 }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: function(c) { return ' ' + c.dataset.label + ': ¥' + fmt(c.parsed.y); } } }
+      },
+      scales: {
+        x: { ticks: { color: '#888880', font: { size: 11 }, maxTicksLimit: 8 }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        y: { ticks: { color: '#888880', font: { size: 11 }, callback: function(v) { return '¥' + fmt(v); } }, grid: { color: 'rgba(0,0,0,0.05)' } }
+      }
+    }
+  });
+
+  var html = '';
+  valid.forEach(function(r) {
+    var el = document.getElementById('sim_' + r.id);
+    var m = el ? (parseFloat(el.value) || 0) : 0;
+    var bp = m * n * 12;
+    var bfv = calcFV(0, m, 0.05, n);
+    var bg = bfv - bp;
+    html += '<div class="tr" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr">' +
+      '<span style="font-size:12px">' + r.name + '</span>' +
+      '<span class="mono">¥' + fmt(m) + '</span>' +
+      '<span class="mono">¥' + fmt(bp) + '</span>' +
+      '<span class="mono pos">¥' + fmt(Math.round(bfv)) + '</span>' +
+      '<span class="mono ' + (bg >= 0 ? 'pos' : 'neg') + '">' + (bg >= 0 ? '+' : '') + '¥' + fmt(Math.round(bg)) + '</span>' +
+      '</div>';
+  });
+  var tfv = calcFV(curVal, totalMonthly, 0.05, n);
+  var tg = tfv - principal;
+  html += '<div class="tr" style="grid-template-columns:2fr 1fr 1fr 1fr 1fr;border-top:1px solid var(--border);font-weight:500">' +
+    '<span style="font-size:12px;font-weight:700">合計</span>' +
+    '<span class="mono">¥' + fmt(totalMonthly) + '</span>' +
+    '<span class="mono">¥' + fmt(principal) + '</span>' +
+    '<span class="mono pos">¥' + fmt(Math.round(tfv)) + '</span>' +
+    '<span class="mono ' + (tg >= 0 ? 'pos' : 'neg') + '">' + (tg >= 0 ? '+' : '') + '¥' + fmt(Math.round(tg)) + '</span>' +
+    '</div>';
+  document.getElementById('simBrandTable').innerHTML = html;
+  document.getElementById('simResult').style.display = '';
 }
 
 // ---- バックアップ ----
