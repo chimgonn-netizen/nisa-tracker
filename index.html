@@ -222,6 +222,23 @@ var mimes = ['image/jpeg', 'image/jpeg'];
 var pasteIdx = 0;
 var RK = 'nisa_rows_v2';
 var SK = 'nisa_snapshots_v2';
+
+function loadRows() {
+  try {
+    var d = localStorage.getItem(RK);
+    if (d) {
+      rows = JSON.parse(d);
+      var ids = rows.map(function(r) { return r.id; }).concat([0]);
+      nextId = Math.max.apply(null, ids) + 1;
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+function saveRows() { try { localStorage.setItem(RK, JSON.stringify(rows)); } catch(e) {} }
+function loadSnaps() { try { var d = localStorage.getItem(SK); return d ? JSON.parse(d) : []; } catch(e) { return []; } }
+function saveSnaps(s) { try { localStorage.setItem(SK, JSON.stringify(s)); } catch(e) {} }
+
 function fmt(n) { return Number(Math.round(n)).toLocaleString('ja-JP'); }
 function rkc(i) { return i === 0 ? 'r1' : i === 1 ? 'r2' : i === 2 ? 'r3' : 'rn'; }
 function getSorted(valid) {
@@ -534,6 +551,11 @@ function importJSON(event) {
   reader.readAsText(file, 'UTF-8');
   event.target.value = '';
 }
+
+// ---- 初期化 ----
+snapshots = loadSnaps();
+if (!loadRows()) rows = [{ id: nextId++, name: '', eval: 0, pnl: 0 }];
+renderRows();
 </script>
 </body>
 </html>
