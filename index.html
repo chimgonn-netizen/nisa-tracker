@@ -86,6 +86,8 @@ canvas{width:100%!important}
 .tab.drag-over{border:2px dashed var(--accent);background:var(--green-bg)}
 .tab{cursor:grab}
 .tab:active{cursor:grabbing}
+.tab.touch-dragging{opacity:.5;background:var(--green-bg);transform:scale(1.05);z-index:10;position:relative;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.tab.touch-target{border:2px dashed var(--accent)}
 
 @media (max-width: 600px) {
   header{padding:16px 16px 14px}
@@ -583,23 +585,27 @@ function initTabDrag() {
   var bar = document.getElementById('tabBar');
   if (!bar) return;
   bar.querySelectorAll('.tab').forEach(function(tab) {
+    tab.addEventListener('mousedown', function() { dragSrcTab = tab; });
     tab.addEventListener('dragstart', function(e) {
       dragSrcTab = tab;
-      tab.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', tab.dataset.tab);
       e.dataTransfer.effectAllowed = 'move';
+      setTimeout(function() { tab.classList.add('dragging'); }, 0);
     });
     tab.addEventListener('dragend', function() {
       tab.classList.remove('dragging');
       bar.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('drag-over'); });
     });
     tab.addEventListener('dragover', function(e) {
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       e.dataTransfer.dropEffect = 'move';
       bar.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('drag-over'); });
       if (tab !== dragSrcTab) tab.classList.add('drag-over');
     });
+    tab.addEventListener('dragleave', function() { tab.classList.remove('drag-over'); });
     tab.addEventListener('drop', function(e) {
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
+      tab.classList.remove('drag-over');
       if (dragSrcTab && dragSrcTab !== tab) {
         var allTabs = Array.from(bar.querySelectorAll('.tab'));
         var srcIdx = allTabs.indexOf(dragSrcTab);
@@ -607,7 +613,69 @@ function initTabDrag() {
         if (srcIdx < dstIdx) bar.insertBefore(dragSrcTab, tab.nextSibling);
         else bar.insertBefore(dragSrcTab, tab);
         saveTabOrder();
+        toast('タブの順番を保存しました');
       }
+    });
+  });
+}
+
+function initTabTouch() {
+  var bar = document.getElementById('tabBar');
+  if (!bar) return;
+  var touchDragTab = null;
+  var longPressTimer = null;
+  var isDragging = false;
+
+  bar.querySelectorAll('.tab').forEach(function(tab) {
+    tab.addEventListener('touchstart', function(e) {
+      touchDragTab = tab;
+      longPressTimer = setTimeout(function() {
+        isDragging = true;
+        tab.classList.add('touch-dragging');
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 500);
+    }, { passive: true });
+
+    tab.addEventListener('touchmove', function(e) {
+      if (!isDragging) { clearTimeout(longPressTimer); return; }
+      e.preventDefault();
+      var touch = e.touches[0];
+      var el = document.elementFromPoint(touch.clientX, touch.clientY);
+      var targetTab = el && el.closest ? el.closest('.tab') : null;
+      bar.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('touch-target'); });
+      if (targetTab && targetTab !== touchDragTab) targetTab.classList.add('touch-target');
+    }, { passive: false });
+
+    tab.addEventListener('touchend', function(e) {
+      clearTimeout(longPressTimer);
+      if (!isDragging) { isDragging = false; touchDragTab = null; return; }
+      isDragging = false;
+      var touch = e.changedTouches[0];
+      var el = document.elementFromPoint(touch.clientX, touch.clientY);
+      var targetTab = el && el.closest ? el.closest('.tab') : null;
+      bar.querySelectorAll('.tab').forEach(function(t) {
+        t.classList.remove('touch-dragging');
+        t.classList.remove('touch-target');
+      });
+      if (targetTab && targetTab !== touchDragTab && touchDragTab) {
+        var allTabs = Array.from(bar.querySelectorAll('.tab'));
+        var srcIdx = allTabs.indexOf(touchDragTab);
+        var dstIdx = allTabs.indexOf(targetTab);
+        if (srcIdx < dstIdx) bar.insertBefore(touchDragTab, targetTab.nextSibling);
+        else bar.insertBefore(touchDragTab, targetTab);
+        saveTabOrder();
+        toast('タブの順番を保存しました');
+      }
+      touchDragTab = null;
+    });
+
+    tab.addEventListener('touchcancel', function() {
+      clearTimeout(longPressTimer);
+      isDragging = false; touchDragTab = null;
+      bar.querySelectorAll('.tab').forEach(function(t) {
+        t.classList.remove('touch-dragging');
+        t.classList.remove('touch-target');
+      });
     });
   });
 }
@@ -639,6 +707,7 @@ if (!loadRows()) rows = [{ id: nextId++, name: '', eval: 0, pnl: 0 }];
 renderRows();
 loadTabOrder();
 initTabDrag();
+initTabTouch();
 </script>
 </body>
 </html>
