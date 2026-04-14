@@ -82,6 +82,10 @@ canvas{width:100%!important}
 .cbi:hover{background:#cceedd}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--text);color:#fff;padding:10px 20px;border-radius:var(--r);font-size:13px;opacity:0;transition:all .25s;pointer-events:none;z-index:999;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.tab.dragging{opacity:.4;background:var(--green-bg)}
+.tab.drag-over{border:2px dashed var(--accent);background:var(--green-bg)}
+.tab{cursor:grab}
+.tab:active{cursor:grabbing}
 
 @media (max-width: 600px) {
   header{padding:16px 16px 14px}
@@ -125,10 +129,10 @@ canvas{width:100%!important}
   <p>tsumiki証券対応・スクリーンショットから自動入力</p>
 </header>
 <div class="main">
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('input')">入力・損益確認</button>
-    <button class="tab" onclick="switchTab('hist')">推移グラフ</button>
-    <button class="tab" onclick="switchTab('bk')">バックアップ</button>
+  <div class="tabs" id="tabBar">
+    <button class="tab active" data-tab="input" draggable="true" onclick="switchTab('input')">入力・損益確認</button>
+    <button class="tab" data-tab="hist" draggable="true" onclick="switchTab('hist')">推移グラフ</button>
+    <button class="tab" data-tab="bk" draggable="true" onclick="switchTab('bk')">バックアップ</button>
   </div>
 
   <!-- 入力タブ -->
@@ -247,8 +251,8 @@ function getSorted(valid) {
 
 function switchTab(tab) {
   var list = ['input', 'hist', 'bk'];
-  document.querySelectorAll('.tab').forEach(function(t, i) {
-    t.classList.toggle('active', list[i] === tab);
+  document.querySelectorAll('.tab').forEach(function(t) {
+    t.classList.toggle('active', t.dataset.tab === tab);
   });
   list.forEach(function(t) {
     document.getElementById('tab-' + t).style.display = t === tab ? '' : 'none';
@@ -496,19 +500,10 @@ function renderHist() {
     }
   });
   var list = document.getElementById('hlist');
-  var recent = snapshots.slice().reverse().slice(0, 10);
-  if (!recent.length) { list.innerHTML = '<p class="em">まだ記録がありません。</p>'; return; }
-  var html = '';
-  recent.forEach(function(s) {
-    var pnl = s.totalPnl || (s.totalEval - s.totalCost);
-    var rate = s.totalCost > 0 ? (pnl / s.totalCost * 100).toFixed(2) : '0.00';
-    html += '<div class="hr">' +
-      '<span style="color:var(--muted);font-size:12px">' + s.date + '</span>' +
-      '<span class="mono" style="font-weight:500">¥' + fmt(s.totalEval) + '</span>' +
-      '<span class="mono ' + (pnl >= 0 ? 'pos' : 'neg') + '" style="font-size:12px">' + (pnl >= 0 ? '+' : '') + '¥' + fmt(pnl) + '（' + (parseFloat(rate) >= 0 ? '+' : '') + rate + '%）</span>' +
-      '</div>';
-  });
-  list.innerHTML = html;
+  var allSnaps = snapshots.slice().reverse();
+  allSnapsCache = allSnaps;
+  if (!allSnaps.length) { list.innerHTML = '<p class="em">まだ記録がありません。</p>'; return; }
+  renderHistList(allSnaps, 10);
 }
 
 // ---- バックアップ ----
@@ -552,10 +547,98 @@ function importJSON(event) {
   event.target.value = '';
 }
 
+function renderHistList(allSnaps, showCount) {
+  var list = document.getElementById('hlist');
+  var html = '';
+  var visible = allSnaps.slice(0, showCount);
+  visible.forEach(function(s) {
+    var pnl = s.totalPnl || (s.totalEval - s.totalCost);
+    var rate = s.totalCost > 0 ? (pnl / s.totalCost * 100).toFixed(2) : '0.00';
+    html += '<div class="hr">' +
+      '<span style="color:var(--muted);font-size:12px">' + s.date + '</span>' +
+      '<span class="mono" style="font-weight:500">¥' + fmt(s.totalEval) + '</span>' +
+      '<span class="mono ' + (pnl >= 0 ? 'pos' : 'neg') + '" style="font-size:12px">' + (pnl >= 0 ? '+' : '') + '¥' + fmt(pnl) + '（' + (parseFloat(rate) >= 0 ? '+' : '') + rate + '%）</span>' +
+      '</div>';
+  });
+  if (allSnaps.length > showCount) {
+    var remaining = allSnaps.length - showCount;
+    html += '<div style="text-align:center;margin-top:12px">' +
+      '<button onclick="renderHistList(allSnapsCache,' + (showCount + 20) + ')" ' +
+      'style="background:none;border:.5px solid var(--border-strong);border-radius:var(--r);padding:8px 24px;font-size:13px;font-family:inherit;color:var(--muted);cursor:pointer">' +
+      'さらに' + remaining + '件を表示</button></div>';
+  } else if (allSnaps.length > 10) {
+    html += '<div style="text-align:center;margin-top:12px">' +
+      '<button onclick="renderHistList(allSnapsCache,10)" ' +
+      'style="background:none;border:.5px solid var(--border-strong);border-radius:var(--r);padding:8px 24px;font-size:13px;font-family:inherit;color:var(--muted);cursor:pointer">' +
+      '折りたたむ</button></div>';
+  }
+  list.innerHTML = html;
+}
+
+var allSnapsCache = [];
+var TAB_ORDER_KEY = 'nisa_tab_order_share';
+var dragSrcTab = null;
+
+function initTabDrag() {
+  var bar = document.getElementById('tabBar');
+  if (!bar) return;
+  bar.querySelectorAll('.tab').forEach(function(tab) {
+    tab.addEventListener('dragstart', function(e) {
+      dragSrcTab = tab;
+      tab.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    tab.addEventListener('dragend', function() {
+      tab.classList.remove('dragging');
+      bar.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('drag-over'); });
+    });
+    tab.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      bar.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('drag-over'); });
+      if (tab !== dragSrcTab) tab.classList.add('drag-over');
+    });
+    tab.addEventListener('drop', function(e) {
+      e.preventDefault();
+      if (dragSrcTab && dragSrcTab !== tab) {
+        var allTabs = Array.from(bar.querySelectorAll('.tab'));
+        var srcIdx = allTabs.indexOf(dragSrcTab);
+        var dstIdx = allTabs.indexOf(tab);
+        if (srcIdx < dstIdx) bar.insertBefore(dragSrcTab, tab.nextSibling);
+        else bar.insertBefore(dragSrcTab, tab);
+        saveTabOrder();
+      }
+    });
+  });
+}
+
+function saveTabOrder() {
+  var bar = document.getElementById('tabBar');
+  if (!bar) return;
+  var order = Array.from(bar.querySelectorAll('.tab')).map(function(t) { return t.dataset.tab; });
+  try { localStorage.setItem(TAB_ORDER_KEY, JSON.stringify(order)); } catch(e) {}
+}
+
+function loadTabOrder() {
+  try {
+    var d = localStorage.getItem(TAB_ORDER_KEY);
+    if (!d) return;
+    var order = JSON.parse(d);
+    var bar = document.getElementById('tabBar');
+    if (!bar) return;
+    order.forEach(function(tabId) {
+      var tab = bar.querySelector('[data-tab="' + tabId + '"]');
+      if (tab) bar.appendChild(tab);
+    });
+  } catch(e) {}
+}
+
 // ---- 初期化 ----
 snapshots = loadSnaps();
 if (!loadRows()) rows = [{ id: nextId++, name: '', eval: 0, pnl: 0 }];
 renderRows();
+loadTabOrder();
+initTabDrag();
 </script>
 </body>
 </html>
